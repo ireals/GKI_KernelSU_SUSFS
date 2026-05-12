@@ -449,14 +449,24 @@ jobs:
         if: inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU'
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
-          SULOG_EVENT=$(find . -path "*/kernelsu/sulog/event.c" | head -1)
+          SULOG_EVENT=$(find . -type f -path "*/KernelSU/kernel/sulog/event.c" | head -1)
+
           if [ -z "$SULOG_EVENT" ]; then
             echo "event.c not found, skipping patch"
+            find . -type f -path "*sulog*event.c" || true
             exit 0
           fi
+
           echo "Patching: $SULOG_EVENT"
-          sed -i 's|#define USER_ARG_NULL ((struct user_arg_ptr){ 0 })|#define USER_ARG_NULL (\&(struct user_arg_ptr){ 0 })|g' "$SULOG_EVENT"
-          echo "Result: $(grep 'USER_ARG_NULL' $SULOG_EVENT)"
+
+          if grep -qF '#define USER_ARG_NULL ((struct user_arg_ptr){ 0 })' "$SULOG_EVENT"; then
+            sed -i 's|#define USER_ARG_NULL ((struct user_arg_ptr){ 0 })|#define USER_ARG_NULL (\&(struct user_arg_ptr){ 0 })|g' "$SULOG_EVENT"
+            echo "Patched USER_ARG_NULL"
+          else
+            echo "USER_ARG_NULL pattern not found, skipping sed"
+          fi
+
+          grep -n 'USER_ARG_NULL\|ksu_sulog_capture_grant_root' "$SULOG_EVENT" || true
 
       - name: 配置 SukiSU 管理器信息
         if: inputs.ksu_variant == 'SukiSU'
