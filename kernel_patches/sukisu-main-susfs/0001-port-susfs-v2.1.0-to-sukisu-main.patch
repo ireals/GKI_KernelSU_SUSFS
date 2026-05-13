@@ -323,10 +323,10 @@ index fa78d97..58ad83f 100644
  
  void __exit ksu_selinux_hide_exit()
 diff --git a/kernel/feature/sucompat.c b/kernel/feature/sucompat.c
-index ca4bb84..9c111c5 100644
+index ca4bb84..f556682 100644
 --- a/kernel/feature/sucompat.c
 +++ b/kernel/feature/sucompat.c
-@@ -11,32 +11,61 @@
+@@ -11,32 +11,64 @@
  #include <linux/version.h>
  #include <linux/sched/task_stack.h>
  #include <linux/ptrace.h>
@@ -345,6 +345,9 @@ index ca4bb84..9c111c5 100644
 +#include "runtime/ksud_boot.h"
  #include "feature/sucompat.h"
  #include "policy/app_profile.h"
++#ifdef CONFIG_KSU_SUSFS
++#include "selinux/selinux.h"
++#endif
 +#ifndef CONFIG_KSU_SUSFS
  #include "hook/syscall_hook.h"
 +#endif
@@ -389,7 +392,7 @@ index ca4bb84..9c111c5 100644
      pr_info("su_compat: set to %d\n", enable);
      return 0;
  }
-@@ -71,6 +100,13 @@ static char __user *ksud_user_path(void)
+@@ -71,6 +103,13 @@ static char __user *ksud_user_path(void)
      return userspace_stack_buffer(ksud_path, sizeof(ksud_path));
  }
  
@@ -403,7 +406,7 @@ index ca4bb84..9c111c5 100644
  int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *__unused_flags)
  {
      const char su[] = SU_PATH;
-@@ -91,6 +127,29 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
+@@ -91,6 +130,29 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
      return 0;
  }
  
@@ -433,7 +436,7 @@ index ca4bb84..9c111c5 100644
  int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
  {
      // const char sh[] = SH_PATH;
-@@ -115,7 +174,78 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
+@@ -115,7 +177,78 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
  
      return 0;
  }
@@ -512,7 +515,7 @@ index ca4bb84..9c111c5 100644
  long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, const struct pt_regs *regs)
  {
      const char su[] = SU_PATH;
-@@ -170,6 +300,7 @@ long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr,
+@@ -170,6 +303,7 @@ long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr,
  do_orig_execve:
      return ksu_syscall_table[orig_nr](regs);
  }
