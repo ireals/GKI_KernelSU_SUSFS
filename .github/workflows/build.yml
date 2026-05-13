@@ -375,7 +375,7 @@ jobs:
                 case "$variant_input" in
                   "Official") BRANCH="-s main" ;;
                   "Next") ;;
-                  "SukiSU") BRANCH="-s builtin" ;;
+                  "SukiSU") BRANCH="-s main" ;;
                   *) echo "未知变体: $variant_input" >&2; exit 1 ;;
                 esac
                 ;;
@@ -445,28 +445,7 @@ jobs:
           else
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
-      - name: Fix SukiSU sulog USER_ARG_NULL type mismatch
-        if: inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU'
-        working-directory: ${{ env.KERNEL_ROOT }}
-        run: |
-          SULOG_EVENT=$(find . -type f -path "*/KernelSU/kernel/sulog/event.c" | head -1)
 
-          if [ -z "$SULOG_EVENT" ]; then
-            echo "event.c not found, skipping patch"
-            find . -type f -path "*sulog*event.c" || true
-            exit 0
-          fi
-
-          echo "Patching: $SULOG_EVENT"
-
-          if grep -qF '#define USER_ARG_NULL ((struct user_arg_ptr){ 0 })' "$SULOG_EVENT"; then
-            sed -i 's|#define USER_ARG_NULL ((struct user_arg_ptr){ 0 })|#define USER_ARG_NULL (\&(struct user_arg_ptr){ 0 })|g' "$SULOG_EVENT"
-            echo "Patched USER_ARG_NULL"
-          else
-            echo "USER_ARG_NULL pattern not found, skipping sed"
-          fi
-
-          grep -n 'USER_ARG_NULL\|ksu_sulog_capture_grant_root' "$SULOG_EVENT" || true
 
       - name: 配置 SukiSU 管理器信息
         if: inputs.ksu_variant == 'SukiSU'
@@ -560,7 +539,7 @@ jobs:
           esac
 
           cd $KERNEL_ROOT/common
-          patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
+          patch -p1 --forward < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch
 
           if [ "${{ inputs.ksu_variant }}" == "Official" ] || [ "${{ inputs.ksu_variant }}" == "Next" ] || [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
             CURRENT_SUB="${{ inputs.sub_level }}"
@@ -674,7 +653,28 @@ jobs:
               fi
             fi
           fi
+      - name: Debug KernelSU/SUSFS symbols
+        if: inputs.enable_susfs
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          echo "=== references in common ==="
+          grep -Rnw common \
+            -e 'ksu_is_init_rc_hook_enabled' \
+            -e 'ksu_is_input_hook_enabled' \
+            -e 'ksu_selinux_hide_running' \
+            -e 'fake_state' \
+            -e 'ksu_input_hook_key_false' \
+            -e 'ksu_init_rc_hook_key_false' || true
 
+          echo "=== definitions in KernelSU ==="
+          grep -Rnw KernelSU/kernel \
+            -e 'DEFINE_STATIC_KEY.*ksu_is_init_rc_hook_enabled' \
+            -e 'DEFINE_STATIC_KEY.*ksu_is_input_hook_enabled' \
+            -e 'ksu_selinux_hide_running' \
+            -e 'fake_state' \
+            -e 'ksu_input_hook_key_false' \
+            -e 'ksu_init_rc_hook_key_false' || true
+            
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
