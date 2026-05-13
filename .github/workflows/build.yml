@@ -446,59 +446,118 @@ jobs:
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
 
+      - name: Add SUSFS Kconfig for SukiSU main
+        if: inputs.ksu_variant == 'SukiSU' && inputs.enable_susfs
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          KSU_KCONFIG="KernelSU/kernel/Kconfig"
 
+          if [ ! -f "$KSU_KCONFIG" ]; then
+            echo "::error::KernelSU Kconfig not found: $KSU_KCONFIG"
+            exit 1
+          fi
+
+          if grep -q '^config KSU_SUSFS$' "$KSU_KCONFIG"; then
+            echo "KSU_SUSFS already exists in Kconfig"
+            exit 0
+          fi
+
+          cat >> "$KSU_KCONFIG" <<'EOF'
+
+          menu "KernelSU - SUSFS"
+          
+          config KSU_SUSFS
+              bool "KernelSU addon - SUSFS"
+              depends on KSU
+              depends on THREAD_INFO_IN_TASK
+              default y
+              help
+                Patch and enable SUSFS to kernel with KernelSU.
+          
+          config KSU_SUSFS_SUS_PATH
+              bool "Enable to hide suspicious path"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_SUS_MOUNT
+              bool "Enable to hide suspicious mounts"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_SUS_KSTAT
+              bool "Enable to spoof suspicious kstat"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_SPOOF_UNAME
+              bool "Enable to spoof uname"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_ENABLE_LOG
+              bool "Enable SUSFS log"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
+              bool "Hide ksu/susfs symbols from kallsyms"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+              bool "Spoof cmdline or bootconfig"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_OPEN_REDIRECT
+              bool "Enable open redirect"
+              depends on KSU_SUSFS
+              default y
+          
+          config KSU_SUSFS_SUS_MAP
+              bool "Enable hiding mmaped files from proc maps"
+              depends on KSU_SUSFS
+              default y
+          
+          endmenu
+          EOF
+
+          echo "Added SUSFS Kconfig to $KSU_KCONFIG"
+
+      - name: Enable SUSFS config
+        if: inputs.enable_susfs
+        run: |
+          cat >> "$DEFCONFIG" <<'EOF'
+          CONFIG_KSU=y
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          CONFIG_KSU_SUSFS_SUS_MAP=y
+          EOF
+          
       - name: 配置 SukiSU 管理器信息
         if: inputs.ksu_variant == 'SukiSU'
         working-directory: ${{ env.KERNEL_ROOT }}/KernelSU
         run: |
           KBUILD_FILE="./kernel/Kbuild"
-          CUSTOM_TAG="${{ vars.MANAGER_STR }}"
 
           if [ ! -f "$KBUILD_FILE" ]; then
             echo "未找到 $KBUILD_FILE，跳过 SukiSU 版本标识定制"
             exit 0
           fi
 
-          GIT_HASH=$(git rev-parse --short=8 HEAD)
-          BRANCH_NAME="${BRANCH#-s }"
-          if [ -z "$BRANCH_NAME" ] || [ "$BRANCH_NAME" = "$BRANCH" ]; then
-            BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+          if ! grep -q 'define get_ksu_version_full' "$KBUILD_FILE"; then
+            echo "SukiSU main style Kbuild detected; skipping old get_ksu_version_full patch"
+            exit 0
           fi
 
-          if [ -n "$CUSTOM_TAG" ]; then
-            VERSION_TEMPLATE="v\$1-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
-          else
-            VERSION_TEMPLATE="v\$1-$GIT_HASH@$BRANCH_NAME"
-          fi
-
-          awk -v body="$VERSION_TEMPLATE" '
-            BEGIN {
-              in_block = 0
-              replaced = 0
-            }
-            /^[[:space:]]*define get_ksu_version_full$/ {
-              print
-              print body
-              in_block = 1
-              replaced = 1
-              next
-            }
-            in_block && /^[[:space:]]*endef$/ {
-              print
-              in_block = 0
-              next
-            }
-            !in_block {
-              print
-            }
-            END {
-              if (!replaced) {
-                exit 1
-              }
-            }
-          ' "$KBUILD_FILE" > "${KBUILD_FILE}.tmp" && mv "${KBUILD_FILE}.tmp" "$KBUILD_FILE"
-
-          echo "已更新 get_ksu_version_full 模板: $VERSION_TEMPLATE"
+          echo "builtin style Kbuild detected; old version template patch can run here if needed"
 
       - name: 应用 SUSFS 补丁
         if: inputs.enable_susfs
