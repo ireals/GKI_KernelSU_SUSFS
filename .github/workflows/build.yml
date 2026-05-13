@@ -410,6 +410,73 @@ jobs:
       - name: 添加 KernelSU
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
+          setup_sukisu_driver_link() {
+            if [ -d "$KERNEL_ROOT/common/drivers" ]; then
+              driver_dir="$KERNEL_ROOT/common/drivers"
+            elif [ -d "$KERNEL_ROOT/drivers" ]; then
+              driver_dir="$KERNEL_ROOT/drivers"
+            else
+              echo "::error::drivers directory not found"
+              exit 127
+            fi
+
+            driver_makefile="$driver_dir/Makefile"
+            driver_kconfig="$driver_dir/Kconfig"
+
+            cd "$driver_dir"
+            ln -sf "$(realpath --relative-to="$driver_dir" "$KERNEL_ROOT/KernelSU/kernel")" kernelsu
+            grep -q "kernelsu" "$driver_makefile" || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "$driver_makefile"
+            grep -q 'source "drivers/kernelsu/Kconfig"' "$driver_kconfig" || sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' "$driver_kconfig"
+            cd "$KERNEL_ROOT"
+          }
+
+          checkout_sukisu_ref() {
+            ref="$1"
+            if git -C KernelSU rev-parse --verify --quiet "origin/$ref" >/dev/null; then
+              git -C KernelSU checkout -B "$ref" "origin/$ref"
+            else
+              git -C KernelSU checkout "$ref"
+            fi
+          }
+
+          checkout_custom_sukisu_ref() {
+            config_file="$GITHUB_WORKSPACE/config/config"
+            if [ ! -f "$config_file" ]; then
+              return 0
+            fi
+
+            custom_enabled=$(grep "^custom=" "$config_file" | cut -d'=' -f2 || true)
+            if [ "$custom_enabled" != "true" ]; then
+              return 0
+            fi
+
+            sukisu_ref=$(grep "^sukisu=" "$config_file" | cut -d'=' -f2 || true)
+            if [ -z "$sukisu_ref" ]; then
+              return 0
+            fi
+
+            echo "SukiSU 使用自定义提交: $sukisu_ref"
+            git -C KernelSU fetch origin "$sukisu_ref" || true
+            checkout_sukisu_ref "$sukisu_ref"
+          }
+
+          clone_sukisu_repo() {
+            repo="$1"
+            ref="$2"
+
+            if [ ! -d "KernelSU/.git" ]; then
+              git clone "$repo" KernelSU
+            else
+              git -C KernelSU remote set-url origin "$repo"
+              git -C KernelSU fetch origin
+            fi
+
+            git -C KernelSU fetch origin "$ref" || git -C KernelSU fetch origin
+            checkout_sukisu_ref "$ref"
+            checkout_custom_sukisu_ref
+            setup_sukisu_driver_link
+          }
+
           case "${{ inputs.ksu_variant }}" in
             "Official")
               echo "添加 KernelSU 官方版..."
@@ -431,7 +498,24 @@ jobs:
               ;;
             "SukiSU")
               echo "添加 SukiSU..."
-              curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
+              if [ "${{ inputs.enable_susfs }}" = "true" ]; then
+                SUKISU_REPO="https://github.com/ireals/SukiSU-Ultra.git"
+                SUKISU_REF="sukisu-main-susfs"
+
+                if git ls-remote --exit-code --heads "$SUKISU_REPO" "$SUKISU_REF" >/dev/null 2>&1; then
+                  echo "使用 SukiSU SUSFS fork: $SUKISU_REPO@$SUKISU_REF"
+                  clone_sukisu_repo "$SUKISU_REPO" "$SUKISU_REF"
+                else
+                  echo "::warning::未找到 $SUKISU_REPO@$SUKISU_REF，回退到 upstream SukiSU main 并应用本仓库 patchset"
+                  curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
+                fi
+
+                if ! grep -Rqs 'ksu_handle_susfs_cmd' KernelSU/kernel; then
+                  bash "$GITHUB_WORKSPACE/kernel_patches/sukisu-main-susfs/apply.sh" "$KERNEL_ROOT/KernelSU"
+                fi
+              else
+                curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash $BRANCH
+              fi
               ;;
             "ReSukiSU")
               echo "添加 ReSukiSU..."
@@ -445,84 +529,6 @@ jobs:
           else
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
-
-      - name: Add SUSFS Kconfig for SukiSU main
-        if: inputs.ksu_variant == 'SukiSU' && inputs.enable_susfs
-        working-directory: ${{ env.KERNEL_ROOT }}
-        run: |
-          KSU_KCONFIG="KernelSU/kernel/Kconfig"
-
-          if [ ! -f "$KSU_KCONFIG" ]; then
-            echo "::error::KernelSU Kconfig not found: $KSU_KCONFIG"
-            exit 1
-          fi
-
-          if grep -q '^config KSU_SUSFS$' "$KSU_KCONFIG"; then
-            echo "KSU_SUSFS already exists in Kconfig"
-            exit 0
-          fi
-
-          cat >> "$KSU_KCONFIG" <<'EOF'
-
-          menu "KernelSU - SUSFS"
-          
-          config KSU_SUSFS
-              bool "KernelSU addon - SUSFS"
-              depends on KSU
-              depends on THREAD_INFO_IN_TASK
-              default y
-              help
-                Patch and enable SUSFS to kernel with KernelSU.
-          
-          config KSU_SUSFS_SUS_PATH
-              bool "Enable to hide suspicious path"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_SUS_MOUNT
-              bool "Enable to hide suspicious mounts"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_SUS_KSTAT
-              bool "Enable to spoof suspicious kstat"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_SPOOF_UNAME
-              bool "Enable to spoof uname"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_ENABLE_LOG
-              bool "Enable SUSFS log"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
-              bool "Hide ksu/susfs symbols from kallsyms"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
-              bool "Spoof cmdline or bootconfig"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_OPEN_REDIRECT
-              bool "Enable open redirect"
-              depends on KSU_SUSFS
-              default y
-          
-          config KSU_SUSFS_SUS_MAP
-              bool "Enable hiding mmaped files from proc maps"
-              depends on KSU_SUSFS
-              default y
-          
-          endmenu
-          EOF
-
-          echo "Added SUSFS Kconfig to $KSU_KCONFIG"
 
       - name: Enable SUSFS config
         if: inputs.enable_susfs
@@ -734,6 +740,46 @@ jobs:
             -e 'ksu_input_hook_key_false' \
             -e 'ksu_init_rc_hook_key_false' || true
             
+      - name: Verify SukiSU SUSFS API
+        if: inputs.ksu_variant == 'SukiSU' && inputs.enable_susfs
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          missing=0
+          while IFS='|' read -r name pattern; do
+            [ -n "$name" ] || continue
+            if ! grep -RqsE "$pattern" KernelSU/kernel; then
+              echo "::error::Missing SukiSU SUSFS API: $name"
+              missing=1
+            fi
+          done <<'EOF'
+          KSU_SUSFS Kconfig|config[[:space:]]+KSU_SUSFS
+          ksu_su_compat_enabled static key|DEFINE_STATIC_KEY_TRUE\(ksu_su_compat_enabled\)
+          ksu_is_init_rc_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_init_rc_hook_enabled\)
+          ksu_is_input_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_input_hook_enabled\)
+          ksu_handle_sys_read|ksu_handle_sys_read[[:space:]]*\(
+          ksu_handle_vfs_fstat|ksu_handle_vfs_fstat[[:space:]]*\(
+          ksu_handle_input_handle_event|ksu_handle_input_handle_event[[:space:]]*\(
+          ksu_handle_execveat|ksu_handle_execveat[[:space:]]*\(
+          ksu_handle_execveat_sucompat|ksu_handle_execveat_sucompat[[:space:]]*\(
+          ksu_handle_faccessat|ksu_handle_faccessat[[:space:]]*\(
+          ksu_handle_stat|ksu_handle_stat[[:space:]]*\(
+          ksu_handle_setresuid|ksu_handle_setresuid[[:space:]]*\(
+          ksu_handle_sys_reboot|ksu_handle_sys_reboot[[:space:]]*\(
+          ksu_handle_susfs_cmd|ksu_handle_susfs_cmd[[:space:]]*\(
+          susfs_get_sid_from_name|susfs_get_sid_from_name[[:space:]]*\(
+          susfs_get_current_sid|susfs_get_current_sid[[:space:]]*\(
+          susfs_is_current_zygote_domain|susfs_is_current_zygote_domain[[:space:]]*\(
+          susfs_is_current_ksu_domain|susfs_is_current_ksu_domain[[:space:]]*\(
+          susfs_is_current_init_domain|susfs_is_current_init_domain[[:space:]]*\(
+          fake_state|struct[[:space:]]+selinux_state[[:space:]]+fake_state
+          ksu_selinux_hide_running|bool[[:space:]]+ksu_selinux_hide_running
+          susfs_init call|susfs_init[[:space:]]*\(
+          EOF
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
