@@ -41,15 +41,14 @@ on:
           - ReSukiSU
           - Official
           #- Next
-        default: ReSukiSU
+        default: SukiSU
       kernelsu_branch:
         description: "KSU 分支"
         type: choice
         options:
           - Stable(标准)
           - Dev(开发)
-        default: Stable(标准)
-
+        default: Dev(开发)
       # ==================== 可选配置 ====================
       version:
         description: "自定义版本名 (可选)"
@@ -59,7 +58,7 @@ on:
       build_time:
         description: "自定义构建时间 (可选，N或留空=当前UTC)"
         type: string
-        default: "Sun Dec 01 08:10:00 UTC 2024"
+        default: "Wed Apr 1 12:00:00 UTC 2026"
         required: false
       # ==================== 选项配置 ====================
       use_kpm:
@@ -106,7 +105,7 @@ on:
       build_a13_5_15:
         description: "Android 13 - 5.15"
         type: boolean
-        default: false
+        default: true
       build_a14_6_1:
         description: "Android 14 - 6.1"
         type: boolean
@@ -122,7 +121,7 @@ on:
       build_all:
         description: "构建全部版本"
         type: boolean
-        default: true
+        default: false
 
 jobs:
   # ==================== 获取管理器 ====================
