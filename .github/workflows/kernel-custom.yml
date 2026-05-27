@@ -56,7 +56,7 @@ on:
           #- Next
           - SukiSU
           - ReSukiSU
-        default: ReSukiSU
+        default: SukiSU
       kernelsu_branch:
         description: "KSU 分支"
         required: true
@@ -65,7 +65,7 @@ on:
           - Stable(标准)
           - Dev(开发)
           - Other(其他/指定)
-        default: Stable(标准)
+        default: Dev(开发)
 
       # ==================== 可选配置 ====================
       version:
@@ -76,7 +76,7 @@ on:
         description: "自定义构建时间 (可选，N或留空=当前UTC)"
         required: false
         type: string
-        default: "Sun Dec 01 08:10:00 UTC 2024"
+        default: "Wed Apr 1 12:00:00 UTC 2026"
 
       # ==================== 选项配置 ====================
       use_kpm:
