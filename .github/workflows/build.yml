@@ -840,6 +840,7 @@ jobs:
             -e 'ksu_is_init_rc_hook_enabled' \
             -e 'ksu_is_input_hook_enabled' \
             -e 'ksu_selinux_hide_running' \
+            -e 'ksu_selinux_hide_sync_status' \
             -e 'fake_state' \
             -e 'ksu_input_hook_key_false' \
             -e 'ksu_init_rc_hook_key_false' || true
@@ -849,6 +850,7 @@ jobs:
             -e 'DEFINE_STATIC_KEY.*ksu_is_init_rc_hook_enabled' \
             -e 'DEFINE_STATIC_KEY.*ksu_is_input_hook_enabled' \
             -e 'ksu_selinux_hide_running' \
+            -e 'ksu_selinux_hide_sync_status' \
             -e 'fake_state' \
             -e 'ksu_input_hook_key_false' \
             -e 'ksu_init_rc_hook_key_false' || true
@@ -886,6 +888,7 @@ jobs:
           susfs_is_current_init_domain|susfs_is_current_init_domain[[:space:]]*\(
           fake_state|struct[[:space:]]+selinux_state[[:space:]]+fake_state
           ksu_selinux_hide_running|bool[[:space:]]+ksu_selinux_hide_running
+          selinux status sync|ksu_selinux_hide_sync_status[[:space:]]*\(
           susfs_init call|susfs_init[[:space:]]*\(
           EOF
 
