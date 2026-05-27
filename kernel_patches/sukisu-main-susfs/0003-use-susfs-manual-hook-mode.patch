@@ -1,0 +1,78 @@
+diff --git a/kernel/Kbuild b/kernel/Kbuild
+index 8febb1fa..53e1d8ad 100644
+--- a/kernel/Kbuild
++++ b/kernel/Kbuild
+@@ -172,7 +172,7 @@ $(info -- KPM is disabled)
+ endif
+ 
+ ifeq ($(CONFIG_KSU_SUSFS),y)
+-$(info -- SukiSU-Ultra: using SUSFS inline hooks)
++$(info -- SukiSU-Ultra: using SUSFS manual hooks)
+ ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
+   $(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
+   $(info -- SUSFS_VERSION: $(SUSFS_VERSION))
+diff --git a/kernel/Kconfig b/kernel/Kconfig
+index 07592494..a39cd207 100644
+--- a/kernel/Kconfig
++++ b/kernel/Kconfig
+@@ -55,10 +55,18 @@ config KSU_DISABLE_POLICY
+ 
+ menu "KernelSU - SUSFS"
+ 
++config KSU_MANUAL_HOOK
++	bool "Use manual hook"
++	depends on KSU
++	default y if KSU_SUSFS
++	help
++	  Use kernel source manual hooks instead of the tracepoint syscall hook path.
++
+ config KSU_SUSFS
+ 	bool "KernelSU addon - SUSFS"
+ 	depends on KSU
+ 	depends on THREAD_INFO_IN_TASK
++	select KSU_MANUAL_HOOK
+ 	default y
+ 	help
+ 	  Patch and enable SUSFS to kernel with KernelSU.
+diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
+index a42663df..165b2d85 100644
+--- a/kernel/runtime/ksud_integration.c
++++ b/kernel/runtime/ksud_integration.c
+@@ -543,7 +543,7 @@ void __init ksu_ksud_init(void)
+ 
+     INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
+ #else
+-    pr_info("ksud: using SUSFS inline hooks\n");
++    pr_info("ksud: using SUSFS manual hooks\n");
+ #endif
+ }
+ 
+diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
+index 2bf94be7..e9b21af0 100644
+--- a/kernel/supercall/dispatch.c
++++ b/kernel/supercall/dispatch.c
+@@ -795,7 +795,11 @@ static int do_get_full_version(void __user *arg)
+ static int do_get_hook_type(void __user *arg)
+ {
+     struct ksu_hook_type_cmd cmd = { 0 };
++#ifdef CONFIG_KSU_SUSFS
++    const char *type = "Manual";
++#else
+     const char *type = "Tracepoint Syscall Redirect";
++#endif
+ 
+     strscpy(cmd.hook_type, type, sizeof(cmd.hook_type));
+ 
+diff --git a/kernel/supercall/supercall.c b/kernel/supercall/supercall.c
+index f58a0097..69b6eefc 100644
+--- a/kernel/supercall/supercall.c
++++ b/kernel/supercall/supercall.c
+@@ -175,7 +175,7 @@ void __init ksu_supercalls_init(void)
+         pr_info("reboot kprobe registered successfully\n");
+     }
+ #else
+-    pr_info("reboot hook handled by SUSFS inline patch\n");
++    pr_info("reboot hook handled by SUSFS manual hook\n");
+ #endif
+ }
+ 

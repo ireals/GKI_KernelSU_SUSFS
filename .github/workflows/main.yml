@@ -317,7 +317,7 @@ jobs:
 
           # Hook 类型
           if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "ReSukiSU" ]; then
-            echo "HOOK_TYPE=SUSFS Inline Hooks" >> $GITHUB_ENV
+            echo "HOOK_TYPE=SUSFS Manual Hooks" >> $GITHUB_ENV
           else
             echo "HOOK_TYPE=KPROBE Hooks" >> $GITHUB_ENV
           fi

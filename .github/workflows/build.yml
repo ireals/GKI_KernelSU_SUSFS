@@ -546,6 +546,13 @@ jobs:
           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
+
+          if [ "${{ inputs.ksu_variant }}" = "SukiSU" ]; then
+            cat >> "$DEFCONFIG" <<'EOF'
+          CONFIG_KSU_MANUAL_HOOK=y
+          # CONFIG_KSU_TRACEPOINT_HOOK is not set
+          EOF
+          fi
           
       - name: 配置 SukiSU 管理器信息
         if: inputs.ksu_variant == 'SukiSU'
@@ -868,6 +875,8 @@ jobs:
             fi
           done <<'EOF'
           KSU_SUSFS Kconfig|config[[:space:]]+KSU_SUSFS
+          KSU manual hook Kconfig|config[[:space:]]+KSU_MANUAL_HOOK
+          SUSFS selects manual hook|select[[:space:]]+KSU_MANUAL_HOOK
           ksu_su_compat_enabled static key|DEFINE_STATIC_KEY_TRUE\(ksu_su_compat_enabled\)
           ksu_is_init_rc_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_init_rc_hook_enabled\)
           ksu_is_input_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_input_hook_enabled\)
@@ -889,6 +898,7 @@ jobs:
           fake_state|struct[[:space:]]+selinux_state[[:space:]]+fake_state
           ksu_selinux_hide_running|bool[[:space:]]+ksu_selinux_hide_running
           selinux status sync|ksu_selinux_hide_sync_status[[:space:]]*\(
+          hook type manual|const[[:space:]]+char[[:space:]]+\*type[[:space:]]*=[[:space:]]*"Manual"
           susfs_init call|susfs_init[[:space:]]*\(
           EOF
 
