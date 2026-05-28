@@ -1,5 +1,5 @@
 diff --git a/kernel/Kbuild b/kernel/Kbuild
-index d4345cd..8febb1f 100644
+index d4345cd3..8febb1fa 100644
 --- a/kernel/Kbuild
 +++ b/kernel/Kbuild
 @@ -6,16 +6,22 @@ kernelsu-objs += feature/sucompat.o
@@ -48,7 +48,7 @@ index d4345cd..8febb1f 100644
  $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
  
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index ac416c5..0759249 100644
+index ac416c5a..07592494 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -53,4 +53,79 @@ config KSU_DISABLE_POLICY
@@ -132,7 +132,7 @@ index ac416c5..0759249 100644
 +
  endmenu
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index 110aaff..b31dc32 100644
+index 110aaffd..b31dc328 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,9 @@
@@ -220,7 +220,7 @@ index 110aaff..b31dc32 100644
      ksu_supercalls_exit();
  
 diff --git a/kernel/feature/kernel_umount.c b/kernel/feature/kernel_umount.c
-index 9caaf9b..19801c5 100644
+index 9caaf9b5..19801c5a 100644
 --- a/kernel/feature/kernel_umount.c
 +++ b/kernel/feature/kernel_umount.c
 @@ -9,6 +9,9 @@
@@ -291,10 +291,10 @@ index 9caaf9b..19801c5 100644
  }
  
 diff --git a/kernel/feature/selinux_hide.c b/kernel/feature/selinux_hide.c
-index 26fe263..c94702b 100644
+index 36601198..85f9393d 100644
 --- a/kernel/feature/selinux_hide.c
 +++ b/kernel/feature/selinux_hide.c
-@@ -9,6 +9,7 @@
+@@ -10,6 +10,7 @@
  #include <linux/printk.h>
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -302,7 +302,16 @@ index 26fe263..c94702b 100644
  #include <asm-generic/errno-base.h>
  #include <net/genetlink.h>
  #include <linux/moduleparam.h>
-@@ -69,12 +70,46 @@ static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct co
+@@ -31,7 +32,7 @@
+ 
+ static DEFINE_MUTEX(selinux_hide_mutex);
+ static bool ksu_selinux_hide_enabled __read_mostly = false;
+-static bool ksu_selinux_hide_running __read_mostly = false;
++bool ksu_selinux_hide_running __read_mostly = false;
+ 
+ enum sel_inos {
+     SEL_ROOT_INO = 2,
+@@ -74,12 +75,16 @@ static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct co
                                              struct context *tcontext, u16 tclass, struct av_decision *avd,
                                              struct extended_perms *xperms) = NULL;
  #else
@@ -314,43 +323,13 @@ index 26fe263..c94702b 100644
  static write_op_fn orig_context_write, orig_access_write;
  
 +#ifdef CONFIG_KSU_SUSFS
-+static u32 ksu_selinux_hide_access_seqno(void)
-+{
-+    struct selinux_kernel_status *status;
-+    struct page *status_page;
-+    u32 sequence;
-+    u32 policyload;
-+    int i;
-+
-+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-+    status_page = selinux_kernel_status_page();
-+#else
-+    status_page = selinux_kernel_status_page(&selinux_state);
-+#endif
-+    if (!status_page)
-+        return 0;
-+
-+    status = page_address(status_page);
-+    if (!status)
-+        return 0;
-+
-+    for (i = 0; i < 3; i++) {
-+        sequence = READ_ONCE(status->sequence);
-+        smp_rmb();
-+        policyload = READ_ONCE(status->policyload);
-+        smp_rmb();
-+        if (!(sequence & 1) && sequence == READ_ONCE(status->sequence))
-+            return policyload;
-+    }
-+
-+    return READ_ONCE(status->policyload);
-+}
++static u32 ksu_selinux_hide_access_seqno(void);
 +#endif
 +
  static ssize_t my_write_context(struct file *file, char *buf, size_t size)
  {
      // apply to all app uids
-@@ -126,6 +161,15 @@ out:
+@@ -131,6 +136,15 @@ out:
      return length;
  }
  
@@ -366,7 +345,7 @@ index 26fe263..c94702b 100644
  static ssize_t my_write_access(struct file *file, char *buf, size_t size)
  {
      // apply to all app uids
-@@ -161,6 +205,14 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
+@@ -166,6 +180,14 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
      if (sscanf(buf, "%s %s %hu", scon, tcon, &tclass) != 3)
          goto out;
  
@@ -381,7 +360,7 @@ index 26fe263..c94702b 100644
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
      length = security_context_to_sid_with_policy(backup_sepolicy, scon, strlen(scon), &ssid, SECSID_NULL, GFP_KERNEL);
      if (length)
-@@ -183,6 +235,10 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
+@@ -188,6 +210,10 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
      security_compute_av_user(&fake_state, ssid, tsid, tclass, &avd);
  #endif
  
@@ -392,7 +371,30 @@ index 26fe263..c94702b 100644
      length = scnprintf(buf, SIMPLE_TRANSACTION_LIMIT, "%x %x %x %x %u %x", avd.allowed, 0xffffffff, avd.auditallow,
                         avd.auditdeny, avd.seqno, avd.flags);
  out:
-@@ -286,11 +342,15 @@ static int ksu_selinux_hide_enable()
+@@ -245,6 +271,22 @@ call_orig:
+ static DEFINE_STATIC_KEY_FALSE(fake_status_initialize_key);
+ static struct page *fake_status = NULL;
+ 
++#ifdef CONFIG_KSU_SUSFS
++static u32 ksu_selinux_hide_access_seqno(void)
++{
++    struct selinux_kernel_status *status;
++    u32 seqno = 0;
++
++    mutex_lock(&selinux_state.status_lock);
++    status = fake_status ? page_address(fake_status) : NULL;
++    if (status)
++        seqno = READ_ONCE(status->policyload);
++    mutex_unlock(&selinux_state.status_lock);
++
++    return seqno;
++}
++#endif
++
+ static void initialize_fake_status()
+ {
+     mutex_lock(&selinux_state.status_lock);
+@@ -358,11 +400,15 @@ static int ksu_selinux_hide_enable()
          goto unhook;
      }
  
@@ -408,8 +410,8 @@ index 26fe263..c94702b 100644
  
      return 0;
  
-@@ -317,7 +377,9 @@ static void ksu_selinux_hide_unhook()
-             pr_err("selinux_hide: exit: patch_text access_write err: %d\n", ret);
+@@ -397,7 +443,9 @@ static void ksu_selinux_hide_unhook()
+             pr_err("selinux_hide: exit: patch_text sel_open_handle_status err: %d\n", ret);
          }
      }
 +#ifndef CONFIG_KSU_SUSFS
@@ -418,27 +420,18 @@ index 26fe263..c94702b 100644
  }
  
  static void ksu_selinux_hide_disable()
-@@ -328,7 +390,7 @@ static void ksu_selinux_hide_disable()
- 
- static DEFINE_MUTEX(selinux_hide_mutex);
- static bool ksu_selinux_hide_enabled __read_mostly = false;
--static bool ksu_selinux_hide_running __read_mostly = false;
-+bool ksu_selinux_hide_running __read_mostly = false;
- 
- static int selinux_hide_feature_get(u64 *value)
- {
-@@ -371,7 +433,9 @@ void __init ksu_selinux_hide_init()
+@@ -488,7 +536,9 @@ void __init ksu_selinux_hide_init()
  {
      if (ksu_register_feature_handler(&selinux_hide_handler)) {
          pr_err("Failed to register selinux_hide feature handler\n");
 +        return;
      }
 +    pr_info("selinux_hide: feature handler registered\n");
- }
- 
- void __exit ksu_selinux_hide_exit()
+     if (ksu_late_loaded) {
+         initialize_fake_status();
+     } else {
 diff --git a/kernel/feature/sucompat.c b/kernel/feature/sucompat.c
-index ca4bb84..f556682 100644
+index ca4bb84e..f5566827 100644
 --- a/kernel/feature/sucompat.c
 +++ b/kernel/feature/sucompat.c
 @@ -11,32 +11,64 @@
@@ -639,7 +632,7 @@ index ca4bb84..f556682 100644
  // sucompat: permitted process can execute 'su' to gain root access.
  void __init ksu_sucompat_init()
 diff --git a/kernel/feature/sucompat.h b/kernel/feature/sucompat.h
-index 1afba60..c86bfe2 100644
+index 1afba60f..c86bfe25 100644
 --- a/kernel/feature/sucompat.h
 +++ b/kernel/feature/sucompat.h
 @@ -2,15 +2,33 @@
@@ -679,7 +672,7 @@ index 1afba60..c86bfe2 100644
 \ No newline at end of file
 +#endif
 diff --git a/kernel/hook/setuid_hook.c b/kernel/hook/setuid_hook.c
-index d3f3ac4..0ae88e2 100644
+index d3f3ac49..0ae88e2f 100644
 --- a/kernel/hook/setuid_hook.c
 +++ b/kernel/hook/setuid_hook.c
 @@ -18,10 +18,12 @@
@@ -738,7 +731,7 @@ index d3f3ac4..0ae88e2 100644
  {
      ksu_kernel_umount_init();
 diff --git a/kernel/hook/setuid_hook.h b/kernel/hook/setuid_hook.h
-index 3a3dfea..da33829 100644
+index 3a3dfea8..da338298 100644
 --- a/kernel/hook/setuid_hook.h
 +++ b/kernel/hook/setuid_hook.h
 @@ -8,6 +8,6 @@ void ksu_setuid_hook_init(void);
@@ -750,7 +743,7 @@ index 3a3dfea..da33829 100644
  
  #endif
 diff --git a/kernel/hook/syscall_event_bridge.c b/kernel/hook/syscall_event_bridge.c
-index eb7ea93..8a1b5fc 100644
+index eb7ea937..8a1b5fce 100644
 --- a/kernel/hook/syscall_event_bridge.c
 +++ b/kernel/hook/syscall_event_bridge.c
 @@ -127,6 +127,6 @@ long __nocfi ksu_hook_setresuid(int orig_nr, const struct pt_regs *regs)
@@ -762,7 +755,7 @@ index eb7ea93..8a1b5fc 100644
      return ret;
  }
 diff --git a/kernel/runtime/ksud.h b/kernel/runtime/ksud.h
-index 62cfaab..6192864 100644
+index 62cfaabf..6192864d 100644
 --- a/kernel/runtime/ksud.h
 +++ b/kernel/runtime/ksud.h
 @@ -1,14 +1,30 @@
@@ -799,10 +792,10 @@ index 62cfaab..6192864 100644
  
  #endif
 diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
-index 25933bb..a42663d 100644
+index 3645660e..5df15ffe 100644
 --- a/kernel/runtime/ksud_integration.c
 +++ b/kernel/runtime/ksud_integration.c
-@@ -16,6 +16,8 @@
+@@ -17,6 +17,8 @@
  #include <linux/namei.h>
  #include <linux/workqueue.h>
  #include <linux/uio.h>
@@ -811,7 +804,7 @@ index 25933bb..a42663d 100644
  
  #include "arch.h"
  #include "klog.h" // IWYU pragma: keep
-@@ -23,8 +25,10 @@
+@@ -24,8 +26,10 @@
  #include "runtime/ksud.h"
  #include "runtime/ksud_boot.h"
  #include "selinux/selinux.h"
@@ -822,7 +815,7 @@ index 25933bb..a42663d 100644
  
  // clang-format off
  static const char KERNEL_SU_RC[] =
-@@ -46,23 +50,15 @@ static const char KERNEL_SU_RC[] =
+@@ -47,23 +51,15 @@ static const char KERNEL_SU_RC[] =
      "\n";
  // clang-format on
  
@@ -852,7 +845,7 @@ index 25933bb..a42663d 100644
  
  static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
  {
-@@ -143,7 +139,7 @@ fail:
+@@ -144,7 +140,7 @@ fail:
      return false;
  }
  
@@ -861,7 +854,7 @@ index 25933bb..a42663d 100644
  {
      static const char app_process[] = "/system/bin/app_process";
      static bool first_zygote = true;
-@@ -152,6 +148,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
+@@ -153,6 +149,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
      static const char system_bin_init[] = "/system/bin/init";
      static bool init_second_stage_executed = false;
  
@@ -871,7 +864,7 @@ index 25933bb..a42663d 100644
      // https://cs.android.com/android/platform/superproject/+/android-16.0.0_r2:system/core/init/main.cpp;l=77
      if (unlikely(!memcmp(path, system_bin_init, sizeof(system_bin_init) - 1) && argv)) {
          char buf[16];
-@@ -316,7 +315,7 @@ static void ksu_install_rc_hook(struct file *file)
+@@ -318,7 +317,7 @@ static void ksu_install_rc_hook(struct file *file)
      file->f_op = &fops_proxy;
  }
  
@@ -880,7 +873,7 @@ index 25933bb..a42663d 100644
  {
      struct file *file = fget(fd);
      if (!file) {
-@@ -326,6 +325,36 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
+@@ -328,6 +327,36 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
      fput(file);
  }
  
@@ -917,7 +910,7 @@ index 25933bb..a42663d 100644
  static unsigned int volumedown_pressed_count = 0;
  
  static bool is_volumedown_enough(unsigned int count)
-@@ -333,7 +362,7 @@ static bool is_volumedown_enough(unsigned int count)
+@@ -335,7 +364,7 @@ static bool is_volumedown_enough(unsigned int count)
      return count >= 3;
  }
  
@@ -926,7 +919,7 @@ index 25933bb..a42663d 100644
  {
      if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
          int val = *value;
-@@ -376,6 +405,7 @@ bool ksu_is_safe_mode()
+@@ -378,6 +407,7 @@ bool ksu_is_safe_mode()
      return false;
  }
  
@@ -934,7 +927,7 @@ index 25933bb..a42663d 100644
  void ksu_execve_hook_ksud(const struct pt_regs *regs)
  {
      const char __user **filename_user = (const char **)&PT_REGS_PARM1(regs);
-@@ -399,17 +429,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
+@@ -401,17 +431,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
          return;
      }
  
@@ -954,7 +947,7 @@ index 25933bb..a42663d 100644
      return orig_sys_read(regs);
  }
  
-@@ -469,12 +497,20 @@ static void do_stop_input_hook(struct work_struct *work)
+@@ -471,12 +499,20 @@ static void do_stop_input_hook(struct work_struct *work)
      unregister_kprobe(&input_event_kp);
  }
  
@@ -976,7 +969,7 @@ index 25933bb..a42663d 100644
  
  void ksu_stop_input_hook_runtime(void)
  {
-@@ -483,13 +519,20 @@ void ksu_stop_input_hook_runtime(void)
+@@ -485,13 +521,20 @@ void ksu_stop_input_hook_runtime(void)
          return;
      }
      input_hook_stopped = true;
@@ -998,7 +991,7 @@ index 25933bb..a42663d 100644
      int ret;
  
      ksu_syscall_table_hook(__NR_read, ksu_sys_read, &orig_sys_read);
-@@ -499,12 +542,18 @@ void __init ksu_ksud_init()
+@@ -501,12 +544,18 @@ void __init ksu_ksud_init()
      pr_info("ksud: input_event_kp: %d\n", ret);
  
      INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
@@ -1019,7 +1012,7 @@ index 25933bb..a42663d 100644
 +    volumedown_pressed_count = 0;
  }
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index a096f4d..7e70e89 100644
+index 6ead379a..0c8722e7 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -144,6 +144,31 @@ void apply_kernelsu_rules()
@@ -1055,7 +1048,7 @@ index a096f4d..7e70e89 100644
      ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
      ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 90a0de0..fddea99 100644
+index 90a0de0d..fddea994 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -22,6 +22,11 @@ static u32 cached_su_sid __read_mostly = 0;
@@ -1138,7 +1131,7 @@ index 90a0de0..fddea99 100644
  {
      struct cred *cred = prepare_creds();
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index a17ed22..3e256ad 100644
+index a17ed226..3e256ad3 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -39,4 +39,15 @@ void escape_to_root_for_adb_root();
@@ -1158,7 +1151,7 @@ index a17ed22..3e256ad 100644
 +
  #endif
 diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
-index 35b1b17..2bf94be 100644
+index 35b1b17d..2bf94be7 100644
 --- a/kernel/supercall/dispatch.c
 +++ b/kernel/supercall/dispatch.c
 @@ -4,6 +4,9 @@
@@ -1250,7 +1243,7 @@ index 35b1b17..2bf94be 100644
  // clang-format off
  static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
 diff --git a/kernel/supercall/supercall.c b/kernel/supercall/supercall.c
-index 4c9361b..f58a009 100644
+index 4c9361b4..f58a0097 100644
 --- a/kernel/supercall/supercall.c
 +++ b/kernel/supercall/supercall.c
 @@ -10,6 +10,9 @@
@@ -1355,7 +1348,7 @@ index 4c9361b..f58a009 100644
      ksu_supercall_cleanup_state();
  }
 diff --git a/kernel/supercall/supercall.h b/kernel/supercall/supercall.h
-index fbedd11..b55f679 100644
+index fbedd11f..b55f679d 100644
 --- a/kernel/supercall/supercall.h
 +++ b/kernel/supercall/supercall.h
 @@ -19,6 +19,10 @@ struct ksu_ioctl_cmd_map {
