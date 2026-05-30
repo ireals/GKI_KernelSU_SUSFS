@@ -1063,13 +1063,18 @@ jobs:
           }
 
           # 必要配置
+          enable_config CONFIG_NAMESPACES
           enable_config CONFIG_SYSVIPC
           enable_config CONFIG_POSIX_MQUEUE
           enable_config CONFIG_IPC_NS
           enable_config CONFIG_PID_NS
+          enable_config CONFIG_UTS_NS
           enable_config CONFIG_DEVTMPFS
 
           # 可选: 网络相关配置 (Docker/NAT 模式)
+          enable_config_if_defined CONFIG_CGROUPS
+          enable_config_if_defined CONFIG_CGROUP_NS
+          enable_config_if_defined CONFIG_NET_NS
           enable_config_if_defined CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
           enable_config_if_defined CONFIG_NETFILTER_XT_TARGET_LOG
           enable_config_if_defined CONFIG_NETFILTER_XT_MATCH_RECENT
