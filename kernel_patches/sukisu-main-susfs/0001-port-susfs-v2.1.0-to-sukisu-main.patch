@@ -1,5 +1,5 @@
 diff --git a/kernel/Kbuild b/kernel/Kbuild
-index d4345cd3..8febb1fa 100644
+index d198351b..7e1aaae3 100644
 --- a/kernel/Kbuild
 +++ b/kernel/Kbuild
 @@ -6,16 +6,22 @@ kernelsu-objs += feature/sucompat.o
@@ -132,7 +132,7 @@ index ac416c5a..07592494 100644
 +
  endmenu
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index 110aaffd..b31dc328 100644
+index 68fa9d50..c4235135 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,9 @@
@@ -163,7 +163,7 @@ index 110aaffd..b31dc328 100644
  #include "feature/uts_spoof.h"
  #include "infra/symbol_resolver.h"
  
-@@ -135,7 +142,9 @@ int __init kernelsu_init(void)
+@@ -138,7 +145,9 @@ int __init kernelsu_init(void)
          ksu_spoof_version(spoof_release, spoof_version);
      }
  
@@ -173,7 +173,7 @@ index 110aaffd..b31dc328 100644
  
      ksu_feature_init();
      ksu_sulog_init();
-@@ -145,6 +154,12 @@ int __init kernelsu_init(void)
+@@ -148,6 +157,12 @@ int __init kernelsu_init(void)
  
      ksu_supercalls_init();
  
@@ -186,7 +186,7 @@ index 110aaffd..b31dc328 100644
      if (ksu_late_loaded) {
          pr_info("late load mode, skipping kprobe hooks\n");
  
-@@ -160,7 +175,9 @@ int __init kernelsu_init(void)
+@@ -163,7 +178,9 @@ int __init kernelsu_init(void)
          ksu_allowlist_init();
          ksu_load_allow_list();
  
@@ -196,7 +196,7 @@ index 110aaffd..b31dc328 100644
  
          ksu_throne_tracker_init();
          ksu_observer_init();
-@@ -175,7 +192,9 @@ int __init kernelsu_init(void)
+@@ -178,7 +195,9 @@ int __init kernelsu_init(void)
          }
  
      } else {
@@ -206,7 +206,7 @@ index 110aaffd..b31dc328 100644
  
          ksu_allowlist_init();
  
-@@ -197,7 +216,12 @@ int __init kernelsu_init(void)
+@@ -200,7 +219,12 @@ int __init kernelsu_init(void)
  void __exit kernelsu_exit(void)
  {
      // Phase 1: Stop all hooks first to prevent new callbacks
@@ -291,7 +291,7 @@ index 9caaf9b5..19801c5a 100644
  }
  
 diff --git a/kernel/feature/selinux_hide.c b/kernel/feature/selinux_hide.c
-index 36601198..85f9393d 100644
+index 5bb59bfe..5e8e5fdf 100644
 --- a/kernel/feature/selinux_hide.c
 +++ b/kernel/feature/selinux_hide.c
 @@ -10,6 +10,7 @@
@@ -792,19 +792,19 @@ index 62cfaabf..6192864d 100644
  
  #endif
 diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
-index 3645660e..5df15ffe 100644
+index 74d9298e..6f75132e 100644
 --- a/kernel/runtime/ksud_integration.c
 +++ b/kernel/runtime/ksud_integration.c
-@@ -17,6 +17,8 @@
- #include <linux/namei.h>
+@@ -19,6 +19,8 @@
  #include <linux/workqueue.h>
  #include <linux/uio.h>
+ #include <linux/stat.h>
 +#include <linux/jump_label.h>
 +#include <linux/static_key.h>
  
  #include "arch.h"
  #include "klog.h" // IWYU pragma: keep
-@@ -24,8 +26,10 @@
+@@ -26,8 +28,10 @@
  #include "runtime/ksud.h"
  #include "runtime/ksud_boot.h"
  #include "selinux/selinux.h"
@@ -815,7 +815,7 @@ index 3645660e..5df15ffe 100644
  
  // clang-format off
  static const char KERNEL_SU_RC[] =
-@@ -47,23 +51,15 @@ static const char KERNEL_SU_RC[] =
+@@ -49,23 +53,15 @@ static const char KERNEL_SU_RC[] =
      "\n";
  // clang-format on
  
@@ -845,7 +845,7 @@ index 3645660e..5df15ffe 100644
  
  static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
  {
-@@ -144,7 +140,7 @@ fail:
+@@ -146,7 +142,7 @@ fail:
      return false;
  }
  
@@ -854,7 +854,7 @@ index 3645660e..5df15ffe 100644
  {
      static const char app_process[] = "/system/bin/app_process";
      static bool first_zygote = true;
-@@ -153,6 +149,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
+@@ -155,6 +151,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
      static const char system_bin_init[] = "/system/bin/init";
      static bool init_second_stage_executed = false;
  
@@ -864,7 +864,7 @@ index 3645660e..5df15ffe 100644
      // https://cs.android.com/android/platform/superproject/+/android-16.0.0_r2:system/core/init/main.cpp;l=77
      if (unlikely(!memcmp(path, system_bin_init, sizeof(system_bin_init) - 1) && argv)) {
          char buf[16];
-@@ -318,7 +317,7 @@ static void ksu_install_rc_hook(struct file *file)
+@@ -460,7 +459,7 @@ static void ksu_install_rc_hook(struct file *file)
      file->f_op = &fops_proxy;
  }
  
@@ -873,7 +873,7 @@ index 3645660e..5df15ffe 100644
  {
      struct file *file = fget(fd);
      if (!file) {
-@@ -328,6 +327,36 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
+@@ -470,6 +469,36 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
      fput(file);
  }
  
@@ -910,7 +910,7 @@ index 3645660e..5df15ffe 100644
  static unsigned int volumedown_pressed_count = 0;
  
  static bool is_volumedown_enough(unsigned int count)
-@@ -335,7 +364,7 @@ static bool is_volumedown_enough(unsigned int count)
+@@ -477,7 +506,7 @@ static bool is_volumedown_enough(unsigned int count)
      return count >= 3;
  }
  
@@ -919,7 +919,7 @@ index 3645660e..5df15ffe 100644
  {
      if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
          int val = *value;
-@@ -378,6 +407,7 @@ bool ksu_is_safe_mode()
+@@ -520,6 +549,7 @@ bool ksu_is_safe_mode()
      return false;
  }
  
@@ -927,7 +927,7 @@ index 3645660e..5df15ffe 100644
  void ksu_execve_hook_ksud(const struct pt_regs *regs)
  {
      const char __user **filename_user = (const char **)&PT_REGS_PARM1(regs);
-@@ -401,17 +431,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
+@@ -543,17 +573,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
          return;
      }
  
@@ -947,7 +947,7 @@ index 3645660e..5df15ffe 100644
      return orig_sys_read(regs);
  }
  
-@@ -471,12 +499,20 @@ static void do_stop_input_hook(struct work_struct *work)
+@@ -615,12 +643,20 @@ static void do_stop_input_hook(struct work_struct *work)
      unregister_kprobe(&input_event_kp);
  }
  
@@ -969,7 +969,7 @@ index 3645660e..5df15ffe 100644
  
  void ksu_stop_input_hook_runtime(void)
  {
-@@ -485,13 +521,20 @@ void ksu_stop_input_hook_runtime(void)
+@@ -629,13 +665,20 @@ void ksu_stop_input_hook_runtime(void)
          return;
      }
      input_hook_stopped = true;
@@ -991,7 +991,7 @@ index 3645660e..5df15ffe 100644
      int ret;
  
      ksu_syscall_table_hook(__NR_read, ksu_sys_read, &orig_sys_read);
-@@ -501,12 +544,18 @@ void __init ksu_ksud_init()
+@@ -645,14 +688,20 @@ void __init ksu_ksud_init()
      pr_info("ksud: input_event_kp: %d\n", ret);
  
      INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
@@ -1010,7 +1010,9 @@ index 3645660e..5df15ffe 100644
      unregister_kprobe(&input_event_kp);
 +#endif
 +    volumedown_pressed_count = 0;
- }
+
+     if (module_rc_buf) {
+         free_module_rc();
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
 index 6ead379a..0c8722e7 100644
 --- a/kernel/selinux/rules.c
