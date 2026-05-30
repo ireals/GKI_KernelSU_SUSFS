@@ -389,11 +389,9 @@ jobs:
               BRANCH="-s main"
               ;;
             "SukiSU")
-              if [ "${{ inputs.enable_susfs }}" = "false" ]; then
-                BRANCH="-s main"
-              else
-                BRANCH="-s builtin"
-              fi
+              # The local sukisu-main-susfs patchset targets SukiSU main.
+              # The builtin branch has a different tree layout and cannot use it.
+              BRANCH="-s main"
               ;;
             "Next")
               BRANCH=""
