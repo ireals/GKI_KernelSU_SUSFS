@@ -305,8 +305,9 @@ index 5bb59bfe..5e8e5fdf 100644
 @@ -31,7 +32,7 @@
  
  static DEFINE_MUTEX(selinux_hide_mutex);
- static bool ksu_selinux_hide_enabled __read_mostly = false;
+-static bool ksu_selinux_hide_enabled __read_mostly = false;
 -static bool ksu_selinux_hide_running __read_mostly = false;
++bool ksu_selinux_hide_enabled __read_mostly = false;
 +bool ksu_selinux_hide_running __read_mostly = false;
  
  enum sel_inos {
@@ -372,8 +373,10 @@ index 5bb59bfe..5e8e5fdf 100644
                         avd.auditdeny, avd.seqno, avd.flags);
  out:
 @@ -245,6 +271,22 @@ call_orig:
- static DEFINE_STATIC_KEY_FALSE(fake_status_initialize_key);
- static struct page *fake_status = NULL;
+-static DEFINE_STATIC_KEY_FALSE(fake_status_initialize_key);
+-static struct page *fake_status = NULL;
++DEFINE_STATIC_KEY_FALSE(fake_status_initialize_key);
++struct page *fake_status = NULL;
  
 +#ifdef CONFIG_KSU_SUSFS
 +static u32 ksu_selinux_hide_access_seqno(void)
@@ -391,7 +394,8 @@ index 5bb59bfe..5e8e5fdf 100644
 +}
 +#endif
 +
- static void initialize_fake_status()
+-static void initialize_fake_status()
++void initialize_fake_status()
  {
      mutex_lock(&selinux_state.status_lock);
 @@ -358,11 +400,15 @@ static int ksu_selinux_hide_enable()

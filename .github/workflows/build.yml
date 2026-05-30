@@ -903,9 +903,12 @@ jobs:
           grep -Rnw common \
             -e 'ksu_is_init_rc_hook_enabled' \
             -e 'ksu_is_input_hook_enabled' \
+            -e 'ksu_selinux_hide_enabled' \
             -e 'ksu_selinux_hide_running' \
+            -e 'fake_status_initialize_key' \
             -e 'fake_state' \
             -e 'fake_status' \
+            -e 'initialize_fake_status' \
             -e 'sel_handle_status_ops' \
             -e 'ksu_input_hook_key_false' \
             -e 'ksu_init_rc_hook_key_false' || true
@@ -914,9 +917,12 @@ jobs:
           grep -Rnw KernelSU/kernel \
             -e 'DEFINE_STATIC_KEY.*ksu_is_init_rc_hook_enabled' \
             -e 'DEFINE_STATIC_KEY.*ksu_is_input_hook_enabled' \
+            -e 'ksu_selinux_hide_enabled' \
             -e 'ksu_selinux_hide_running' \
+            -e 'fake_status_initialize_key' \
             -e 'fake_state' \
             -e 'fake_status' \
+            -e 'initialize_fake_status' \
             -e 'sel_handle_status_ops' \
             -e 'ksu_input_hook_key_false' \
             -e 'ksu_init_rc_hook_key_false' || true
@@ -955,7 +961,11 @@ jobs:
           susfs_is_current_ksu_domain|susfs_is_current_ksu_domain[[:space:]]*\(
           susfs_is_current_init_domain|susfs_is_current_init_domain[[:space:]]*\(
           fake_state|struct[[:space:]]+selinux_state[[:space:]]+fake_state
+          ksu_selinux_hide_enabled|^bool[[:space:]]+ksu_selinux_hide_enabled
           ksu_selinux_hide_running|bool[[:space:]]+ksu_selinux_hide_running
+          fake_status_initialize_key|^DEFINE_STATIC_KEY_FALSE\(fake_status_initialize_key\)
+          fake_status page|^struct[[:space:]]+page[[:space:]]+\*fake_status
+          initialize_fake_status|^void[[:space:]]+initialize_fake_status[[:space:]]*\(
           selinux fake status open hook|my_sel_open_handle_status[[:space:]]*\(
           selinux fake status boot hook|ksu_selinux_hide_handle_second_stage[[:space:]]*\(
           hook type manual|const[[:space:]]+char[[:space:]]+\*type[[:space:]]*=[[:space:]]*"Manual"
