@@ -539,6 +539,9 @@ jobs:
             "ReSukiSU")
               echo "添加 ReSukiSU..."
               curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+              if [ "${{ inputs.enable_susfs }}" = "true" ]; then
+                bash "$GITHUB_WORKSPACE/kernel_patches/resukisu-susfs/apply.sh" "$KERNEL_ROOT/KernelSU"
+              fi
               ;;
             *)
               if [ -z "$LEGACY_SUKISU_CONFIG" ]; then
@@ -578,6 +581,11 @@ jobs:
             cat >> "$DEFCONFIG" <<'EOF'
           CONFIG_KSU_MANUAL_HOOK=y
           # CONFIG_KSU_TRACEPOINT_HOOK is not set
+          EOF
+          elif [ "${{ inputs.ksu_variant }}" = "ReSukiSU" ]; then
+            cat >> "$DEFCONFIG" <<'EOF'
+          # CONFIG_KSU_TRACEPOINT_HOOK is not set
+          # CONFIG_KSU_MANUAL_HOOK is not set
           EOF
           fi
           
@@ -876,11 +884,14 @@ jobs:
             # Android 16 - 6.12 修复
             if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
               # 修复 setuid_hook.c 重复定义
-              SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
-              if [ -f "$SETUID_HOOK" ]; then
-                sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
-                echo "已修复 setuid_hook.c 重复定义问题"
-              fi
+              for SETUID_HOOK in \
+                "$KERNEL_ROOT/common/drivers/kernelsu/hook/setuid_hook.c" \
+                "$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"; do
+                if [ -f "$SETUID_HOOK" ] && grep -q 'defined(CONFIG_KSU_MANUAL_HOOK))' "$SETUID_HOOK"; then
+                  sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
+                  echo "已修复 setuid_hook.c 重复定义问题: $SETUID_HOOK"
+                fi
+              done
 
               # 修复 6.12.58+: exec.c 头部上下文变化导致 SUSFS 补丁漏掉 susfs_def.h
               if grep -q 'susfs_is_current_proc_umounted' ./fs/exec.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/exec.c; then
@@ -967,6 +978,50 @@ jobs:
           selinux fake status open hook|my_sel_open_handle_status[[:space:]]*\(
           selinux fake status boot hook|ksu_selinux_hide_handle_second_stage[[:space:]]*\(
           hook type manual|const[[:space:]]+char[[:space:]]+\*type[[:space:]]*=[[:space:]]*"Manual"
+          susfs_init call|susfs_init[[:space:]]*\(
+          EOF
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Verify ReSukiSU SUSFS API
+        if: inputs.ksu_variant == 'ReSukiSU' && inputs.enable_susfs
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          missing=0
+          while IFS='|' read -r name pattern; do
+            [ -n "$name" ] || continue
+            if ! grep -RqsE "$pattern" KernelSU/kernel; then
+              echo "::error::Missing ReSukiSU SUSFS API: $name"
+              missing=1
+            fi
+          done <<'EOF'
+          KSU_SUSFS Kconfig|config[[:space:]]+KSU_SUSFS
+          ksu_su_compat_enabled static key|DEFINE_STATIC_KEY_TRUE\(ksu_su_compat_enabled\)
+          ksu_is_init_rc_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_init_rc_hook_enabled\)
+          ksu_is_input_hook_enabled|DEFINE_STATIC_KEY_TRUE\(ksu_is_input_hook_enabled\)
+          ksu_handle_sys_read|ksu_handle_sys_read[[:space:]]*\(
+          ksu_handle_vfs_fstat|ksu_handle_vfs_fstat[[:space:]]*\(
+          ksu_handle_input_handle_event|ksu_handle_input_handle_event[[:space:]]*\(
+          ksu_handle_execveat|ksu_handle_execveat[[:space:]]*\(
+          ksu_handle_execveat_sucompat|ksu_handle_execveat_sucompat[[:space:]]*\(
+          ksu_handle_faccessat|ksu_handle_faccessat[[:space:]]*\(
+          ksu_handle_stat|ksu_handle_stat[[:space:]]*\(
+          ksu_handle_setresuid|ksu_handle_setresuid[[:space:]]*\(
+          ksu_handle_sys_reboot|ksu_handle_sys_reboot[[:space:]]*\(
+          ksu_handle_susfs_cmd|ksu_handle_susfs_cmd[[:space:]]*\(
+          susfs_get_sid_from_name|susfs_get_sid_from_name[[:space:]]*\(
+          susfs_get_current_sid|susfs_get_current_sid[[:space:]]*\(
+          susfs_is_current_zygote_domain|susfs_is_current_zygote_domain[[:space:]]*\(
+          susfs_is_current_ksu_domain|susfs_is_current_ksu_domain[[:space:]]*\(
+          susfs_is_current_init_domain|susfs_is_current_init_domain[[:space:]]*\(
+          ksu_selinux_hide_enabled|^bool[[:space:]]+ksu_selinux_hide_enabled
+          ksu_selinux_hide_running|bool[[:space:]]+ksu_selinux_hide_running
+          fake_status_initialize_key|^DEFINE_STATIC_KEY_FALSE\(fake_status_initialize_key\)
+          fake_status page|^struct[[:space:]]+page[[:space:]]+\*fake_status
+          initialize_fake_status|^void[[:space:]]+initialize_fake_status[[:space:]]*\(
+          fake status prepare|ksu_selinux_hide_prepare_fake_status[[:space:]]*\(
           susfs_init call|susfs_init[[:space:]]*\(
           EOF
 
