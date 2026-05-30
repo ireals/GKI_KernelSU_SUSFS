@@ -560,6 +560,12 @@ jobs:
             echo "KSU_LATEST_COMMIT_DATE=未知" >> $GITHUB_ENV
           fi
 
+      - name: 备份原始 defconfig
+        run: |
+          if [ ! -f "$DEFCONFIG.orig" ]; then
+            cp "$DEFCONFIG" "$DEFCONFIG.orig"
+          fi
+
       - name: Enable SUSFS config
         if: inputs.enable_susfs
         run: |
@@ -1035,8 +1041,11 @@ jobs:
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
 
-      - name: 备份基准 defconfig
-        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
+      - name: 确保基准 defconfig 备份
+        run: |
+          if [ ! -f "$DEFCONFIG.orig" ]; then
+            cp "$DEFCONFIG" "$DEFCONFIG.orig"
+          fi
 
       - name: 集成 Droidspaces 支持
         if: inputs.droidspaces != 'off'
