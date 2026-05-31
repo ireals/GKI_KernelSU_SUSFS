@@ -295,6 +295,12 @@ jobs:
           fi
 
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+          if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" && "${{ inputs.sub_level }}" == "30" && "${{ inputs.os_patch_level }}" == "2025-07" ]]; then
+            echo "Pin Android 16 6.12.30 stock common tag: android16-6.12-2025-07_r7"
+            git -C common fetch --depth=1 https://android.googlesource.com/kernel/common refs/tags/android16-6.12-2025-07_r7
+            git -C common checkout --detach FETCH_HEAD
+            echo "STOCK_LOCALVERSION_SUFFIX=-android16-5-g6e872b4863d6-ab13847919-4k" >> $GITHUB_ENV
+          fi
           echo "REMOTE_BRANCH=$REMOTE_BRANCH" >> $GITHUB_ENV
 
       - name: 应用 Stock Config 伪装
@@ -1493,6 +1499,11 @@ jobs:
           VERSION_INPUT=$(echo "${{ inputs.version }}" | tr -d '[:space:]')
           if [ -n "$VERSION_INPUT" ]; then
             CLEAN_VERSION=$(echo "$VERSION_INPUT" | sed -E 's/^[0-9]+\.[0-9]+\.[0-9]+//')
+            perl -i -0777 -pe 's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1echo "\$\{KERNELVERSION\}'"${CLEAN_VERSION}"'"/s' ./common/scripts/setlocalversion 2>/dev/null || true
+            sed -i "\$s|echo \"\$res\"|echo \"${CLEAN_VERSION}\"|" ./common/scripts/setlocalversion 2>/dev/null || true
+            sed -i '/^CONFIG_LOCALVERSION=/ s/="\([^"]*\)"/="'"$CLEAN_VERSION"'"/' ./common/arch/arm64/configs/gki_defconfig
+          elif [ -n "${STOCK_LOCALVERSION_SUFFIX:-}" ]; then
+            CLEAN_VERSION="$STOCK_LOCALVERSION_SUFFIX"
             perl -i -0777 -pe 's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1echo "\$\{KERNELVERSION\}'"${CLEAN_VERSION}"'"/s' ./common/scripts/setlocalversion 2>/dev/null || true
             sed -i "\$s|echo \"\$res\"|echo \"${CLEAN_VERSION}\"|" ./common/scripts/setlocalversion 2>/dev/null || true
             sed -i '/^CONFIG_LOCALVERSION=/ s/="\([^"]*\)"/="'"$CLEAN_VERSION"'"/' ./common/arch/arm64/configs/gki_defconfig
