@@ -146,6 +146,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
+      artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
       called_from_main: true
 
@@ -164,6 +165,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
+      artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
       called_from_main: true
 
@@ -182,6 +184,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
+      artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
       called_from_main: true
 
@@ -200,6 +203,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
+      artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
       called_from_main: true
 
@@ -218,6 +222,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
+      artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
       called_from_main: true
 
@@ -353,6 +358,8 @@ jobs:
       # ==================== 检出代码 ====================
       - name: 检出代码
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       # ==================== 确定 KSU 引用 ====================
       # 根据实际构建逻辑确定 KernelSU 上游引用
@@ -570,9 +577,7 @@ jobs:
 
           NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
-
-          git tag "$NEW_TAG"
-          git push --tags
+          echo "生成标签: $NEW_TAG"
 
       # ==================== 下载构建产物 ====================
       - name: 下载构建产物
@@ -591,6 +596,7 @@ jobs:
           gh release create "$NEW_TAG" \
             --title "$RELEASE_NAME" \
             --notes-file release_body.md \
+            --target "$GITHUB_SHA" \
             $PRERELEASE_FLAG
 
       # ==================== 上传管理器和模块 ====================
