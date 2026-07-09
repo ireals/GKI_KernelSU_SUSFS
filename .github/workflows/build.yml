@@ -102,6 +102,7 @@ jobs:
           echo "构建时间      : ${{ inputs.build_time }}"
           echo "SUSFS 状态    : ${{ inputs.enable_susfs }}"
           echo "ZRAM 增强     : ${{ inputs.use_zram }}"
+          echo "TCP BBR       : 已启用 (bbr + fq，默认拥塞控制)"
           echo "BBG 补丁      : ${{ inputs.use_bbg }}"
           echo "KPM 功能      : ${{ inputs.use_kpm }}"
           echo "Re-Kernel     : ${{ inputs.use_rekernel }}"
@@ -1390,6 +1391,19 @@ jobs:
           if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
             cat "$ZZH_PATCHES/config/zram.config" >> "$CONFIG_FILE"
           fi
+
+      - name: 配置 TCP BBR 拥塞控制
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          BBR_CONFIG="$ZZH_PATCHES/config/bbr.config"
+          if [ ! -f "$BBR_CONFIG" ]; then
+            echo "::error::未找到 BBR 配置文件: $BBR_CONFIG"
+            exit 1
+          fi
+          echo "启用 TCP BBR 拥塞控制及 FQ 队列调度..."
+          grep -v '^\s*#' "$BBR_CONFIG" | grep -v '^\s*$' >> "$DEFCONFIG"
+          echo "已追加以下 BBR 配置到 defconfig:"
+          grep -v '^\s*#' "$BBR_CONFIG" | grep -v '^\s*$'
 
       - name: 添加 BBG 防格机补丁
         if: inputs.use_bbg
