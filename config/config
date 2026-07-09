@@ -13,16 +13,25 @@
 # ================================================================
 
 # 是否启用自定义提交 (true/false)
-custom=false
+#
+# 注意: 固定 SukiSU + SUSFS 到 2026-06-02 的已知良好基线。
+#   上游 SukiSU main 在 2026-06-19 (#3521) 重构了 sucompat，
+#   susfs4ksu 在 2026-06-21 从 v2.1.0 升级到 v2.2.0，
+#   这两者都与本仓库的 kernel_patches/sukisu-main-susfs (SUSFS v2.1.0 移植) 不兼容，
+#   会导致补丁无法应用 / 编译失败。
+#   下面的固定提交与该补丁集匹配，且此组合在 2026-06-02 已成功构建。
+custom=true
 
 # ==================== SUSFS 各分支的 commit hash ====================
 # 仅当 custom=true 时生效
 gki-android12-5.10=
-gki-android13-5.15=
+# SUSFS v2.1.0 (升级到 v2.2.0 之前的最后基线，匹配 SukiSU 移植补丁)
+gki-android13-5.15=cb79a8b35e2387a98645024f432b8d0c7cab6625
 gki-android14-6.1=
 gki-android15-6.6=
 gki-android16-6.12=
 
 # ==================== SukiSU 的 commit hash ====================
 # 仅当 custom=true 且使用 SukiSU 变体时生效
-sukisu=
+# 2026-06-02 的 SukiSU main HEAD，kernel_patches/sukisu-main-susfs 可干净应用
+sukisu=0ca744a88835144c58d8256ebb32c279edabfcde
