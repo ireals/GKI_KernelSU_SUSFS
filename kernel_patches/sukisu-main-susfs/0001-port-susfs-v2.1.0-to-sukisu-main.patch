@@ -436,7 +436,7 @@ index 5bb59bfe..114d9695 100644
          initialize_fake_status();
      } else {
 diff --git a/kernel/feature/sucompat.c b/kernel/feature/sucompat.c
-index 33df9d15..037b9166 100644
+index 33df9d15..cf12d23c 100644
 --- a/kernel/feature/sucompat.c
 +++ b/kernel/feature/sucompat.c
 @@ -254,3 +254,9 @@ void __exit ksu_sucompat_exit()
@@ -448,7 +448,7 @@ index 33df9d15..037b9166 100644
 +int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *ptr, int *retval, int *flags) { return 0; }
 +int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *ptr, int *retval, int *flags) { return 0; }
 +int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags) { return 0; }
-+
++int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags) { return 0; }
 diff --git a/kernel/hook/setuid_hook.c b/kernel/hook/setuid_hook.c
 index d3f3ac49..0ae88e2f 100644
 --- a/kernel/hook/setuid_hook.c
@@ -593,7 +593,7 @@ index 62cfaabf..6192864d 100644
  
  #endif
 diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
-index 38d1476f..19750700 100644
+index 38d1476f..cab92497 100644
 --- a/kernel/runtime/ksud_integration.c
 +++ b/kernel/runtime/ksud_integration.c
 @@ -19,6 +19,8 @@
@@ -714,15 +714,7 @@ index 38d1476f..19750700 100644
  {
      if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
          int val = *value;
-@@ -519,6 +542,7 @@ bool ksu_is_safe_mode()
-     return false;
- }
- 
-+#ifndef CONFIG_KSU_SUSFS
- void ksu_execve_hook_ksud(const struct pt_regs *regs)
- {
-     const char __user **filename_user = (const char **)&PT_REGS_PARM1(regs);
-@@ -542,17 +566,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
+@@ -542,17 +565,16 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
          return;
      }
  
@@ -730,6 +722,7 @@ index 38d1476f..19750700 100644
 +    ksu_handle_execveat_ksud(path, &argv, NULL, NULL);
  }
  
++#ifndef CONFIG_KSU_SUSFS
  static long (*orig_sys_read)(const struct pt_regs *regs);
  static long ksu_sys_read(const struct pt_regs *regs)
  {
