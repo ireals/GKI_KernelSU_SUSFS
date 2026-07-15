@@ -1,8 +1,13 @@
 diff --git a/kernel/Kbuild b/kernel/Kbuild
-index d198351b..894e7673 100644
+index d198351b..b0d070e7 100644
 --- a/kernel/Kbuild
 +++ b/kernel/Kbuild
-@@ -6,14 +6,18 @@ kernelsu-objs += feature/sucompat.o
+@@ -2,18 +2,23 @@ kernelsu-objs := core/init.o
+ 
+ kernelsu-objs += feature/kernel_umount.o
+ kernelsu-objs += feature/sulog.o
++kernelsu-objs += feature/bypass_charge.o
+ kernelsu-objs += feature/sucompat.o
  
  kernelsu-objs += hook/lsm_hook.o
  kernelsu-objs += hook/setuid_hook.o
@@ -24,7 +29,7 @@ index d198351b..894e7673 100644
  kernelsu-objs += hook/x86_64/syscall_hook.o
  endif
  
-@@ -165,6 +169,18 @@ else
+@@ -165,6 +170,18 @@ else
  $(info -- KPM is disabled)
  endif
  
@@ -128,7 +133,7 @@ index ac416c5a..07592494 100644
 +
  endmenu
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index a4364598..fccde089 100644
+index a4364598..1812e1a8 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,9 @@
@@ -141,10 +146,13 @@ index a4364598..fccde089 100644
  
  #include "policy/allowlist.h"
  #include "policy/app_profile.h"
-@@ -18,6 +21,7 @@
+@@ -16,8 +19,9 @@
+ #include "hook/syscall_hook_manager.h"
+ #include "hook/lsm_hook.h"
  #include "runtime/ksud.h"
- #include "runtime/ksud_boot.h"
+-#include "runtime/ksud_boot.h"
  #include "feature/sulog.h"
++#include "feature/bypass_charge.h"
 +#include "feature/sucompat.h"
  #include "supercall/supercall.h"
  #include "ksu.h"
@@ -157,7 +165,15 @@ index a4364598..fccde089 100644
  #include "feature/uts_spoof.h"
  #include "infra/symbol_resolver.h"
  
-@@ -149,6 +154,10 @@ int __init kernelsu_init(void)
+@@ -142,6 +147,7 @@ int __init kernelsu_init(void)
+     ksu_syscall_hook_init();
+ 
+     ksu_feature_init();
++    ksu_bypass_charge_init();
+     ksu_sulog_init();
+     ksu_adb_root_init();
+     ksu_lsm_hook_init();
+@@ -149,6 +155,10 @@ int __init kernelsu_init(void)
  
      ksu_supercalls_init();
  
@@ -168,6 +184,135 @@ index a4364598..fccde089 100644
      if (ksu_late_loaded) {
          pr_info("late load mode, skipping kprobe hooks\n");
  
+@@ -223,6 +233,7 @@ void __exit kernelsu_exit(void)
+     ksu_adb_root_exit();
+     ksu_sulog_exit();
+     ksu_feature_exit();
++    ksu_bypass_charge_exit();
+ 
+     put_cred(ksu_cred);
+ }
+diff --git a/kernel/feature/bypass_charge.c b/kernel/feature/bypass_charge.c
+new file mode 100644
+index 00000000..5720a31f
+--- /dev/null
++++ b/kernel/feature/bypass_charge.c
+@@ -0,0 +1,102 @@
++#include <linux/module.h>
++#include <linux/kprobes.h>
++#include <linux/sysfs.h>
++#include <linux/kobject.h>
++#include <linux/string.h>
++
++#include "bypass_charge.h"
++
++// ==========================================
++// TODO: CHANGE THIS TO YOUR DEVICE'S FUNCTION
++// ==========================================
++#define TARGET_FUNC_NAME "mca_set_fcc" // or "smb_set_charge_current", etc.
++
++static int bypass_enabled = 0;
++static struct kobject *bypass_kobj = NULL;
++
++static int bypass_charge_pre_handler(struct kprobe *p, struct pt_regs *regs)
++{
++    if (bypass_enabled) {
++        // We only print once in a while to avoid log spam, or we just keep it silent.
++        // For debugging, you can uncomment this:
++        // pr_info_ratelimited("ksu_bypass: intercepting %s to force 0mA\n", TARGET_FUNC_NAME);
++        
++        // ==========================================
++        // TODO: MODIFY ARGUMENTS BASED ON TARGET FUNC
++        // Assuming ARM64 and the first argument is FCC in mA or uA
++        // ==========================================
++#if defined(__aarch64__)
++        regs->regs[0] = 0; // Set first argument to 0
++#elif defined(__x86_64__)
++        regs->di = 0; // Set first argument to 0
++#endif
++    }
++    return 0;
++}
++
++static struct kprobe kp_bypass = {
++    .symbol_name = TARGET_FUNC_NAME,
++    .pre_handler = bypass_charge_pre_handler,
++};
++
++// Sysfs read
++static ssize_t bypass_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
++{
++    return sprintf(buf, "%d\n", bypass_enabled);
++}
++
++// Sysfs write
++static ssize_t bypass_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
++{
++    int val;
++    if (kstrtoint(buf, 10, &val) < 0)
++        return -EINVAL;
++    
++    bypass_enabled = (val != 0);
++    pr_info("ksu_bypass: bypass_enabled set to %d\n", bypass_enabled);
++    return count;
++}
++
++static struct kobj_attribute bypass_attribute = __ATTR(bypass_charge, 0664, bypass_show, bypass_store);
++
++void ksu_bypass_charge_init(void)
++{
++    int ret;
++
++    // Create sysfs node: /sys/kernel/ksu_bypass/bypass_charge
++    bypass_kobj = kobject_create_and_add("ksu_bypass", kernel_kobj);
++    if (!bypass_kobj) {
++        pr_err("ksu_bypass: failed to create kobject\n");
++        return;
++    }
++
++    ret = sysfs_create_file(bypass_kobj, &bypass_attribute.attr);
++    if (ret) {
++        pr_err("ksu_bypass: failed to create sysfs file\n");
++        kobject_put(bypass_kobj);
++        return;
++    }
++
++    // Register kprobe
++    ret = register_kprobe(&kp_bypass);
++    if (ret < 0) {
++        pr_err("ksu_bypass: register_kprobe failed, returned %d\n", ret);
++        pr_err("ksu_bypass: Make sure '%s' exists in the loaded modules.\n", TARGET_FUNC_NAME);
++        // Note: We don't abort sysfs creation so user can still see the file, but it won't do anything.
++    } else {
++        pr_info("ksu_bypass: Planted kprobe at %s\n", TARGET_FUNC_NAME);
++    }
++}
++
++void ksu_bypass_charge_exit(void)
++{
++    if (kp_bypass.addr) {
++        unregister_kprobe(&kp_bypass);
++        pr_info("ksu_bypass: kprobe at %s unregistered\n", TARGET_FUNC_NAME);
++    }
++
++    if (bypass_kobj) {
++        sysfs_remove_file(bypass_kobj, &bypass_attribute.attr);
++        kobject_put(bypass_kobj);
++    }
++}
+diff --git a/kernel/feature/bypass_charge.h b/kernel/feature/bypass_charge.h
+new file mode 100644
+index 00000000..4103619a
+--- /dev/null
++++ b/kernel/feature/bypass_charge.h
+@@ -0,0 +1,7 @@
++#ifndef __KSU_BYPASS_CHARGE_H
++#define __KSU_BYPASS_CHARGE_H
++
++void ksu_bypass_charge_init(void);
++void ksu_bypass_charge_exit(void);
++
++#endif // __KSU_BYPASS_CHARGE_H
 diff --git a/kernel/feature/kernel_umount.c b/kernel/feature/kernel_umount.c
 index f914ff82..7ccfb073 100644
 --- a/kernel/feature/kernel_umount.c
