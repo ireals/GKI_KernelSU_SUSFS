@@ -194,7 +194,7 @@ index a4364598..1812e1a8 100644
  }
 diff --git a/kernel/feature/bypass_charge.c b/kernel/feature/bypass_charge.c
 new file mode 100644
-index 00000000..5720a31f
+index 00000000..8c112ca2
 --- /dev/null
 +++ b/kernel/feature/bypass_charge.c
 @@ -0,0 +1,102 @@
@@ -207,9 +207,9 @@ index 00000000..5720a31f
 +#include "bypass_charge.h"
 +
 +// ==========================================
-+// TODO: CHANGE THIS TO YOUR DEVICE'S FUNCTION
++// Targeted for POCO F6 Pro / Redmi K70 (vermeer)
 +// ==========================================
-+#define TARGET_FUNC_NAME "mca_set_fcc" // or "smb_set_charge_current", etc.
++#define TARGET_FUNC_NAME "battery_psy_set_fcc"
 +
 +static int bypass_enabled = 0;
 +static struct kobject *bypass_kobj = NULL;
