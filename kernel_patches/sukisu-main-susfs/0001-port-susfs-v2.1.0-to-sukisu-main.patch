@@ -192,7 +192,7 @@ index a4364598..01367c74 100644
  }
 diff --git a/kernel/feature/bypass_charge.c b/kernel/feature/bypass_charge.c
 new file mode 100644
-index 00000000..230c3f20
+index 00000000..560cc389
 --- /dev/null
 +++ b/kernel/feature/bypass_charge.c
 @@ -0,0 +1,124 @@
@@ -226,9 +226,9 @@ index 00000000..230c3f20
 +        return 0;
 +#endif
 +
-+        // POWER_SUPPLY_PROP_FAST_CHARGE_CURRENT (64) or POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT (63)
-+        if (psp == POWER_SUPPLY_PROP_FAST_CHARGE_CURRENT || 
-+            psp == POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT) {
++        if (psp == POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT ||
++            psp == POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX ||
++            psp == POWER_SUPPLY_PROP_CURRENT_MAX) {
 +            
 +            union power_supply_propval *val;
 +#if defined(__aarch64__)
