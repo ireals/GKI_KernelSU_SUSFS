@@ -1574,12 +1574,12 @@ jobs:
             fi
 
             NORMALIZED_TIME="$(LC_ALL=C TZ=UTC date -u -d "$INPUT_TIME" +'%a %b %d %T UTC %Y' 2>/dev/null || true)"
-            if [[ "$NORMALIZED_TIME" != "$INPUT_TIME" ]]; then
-              echo "::warning title=构建时间无效::自定义构建时间无法解析为真实 UTC 时间，或星期与日期不匹配。"
+            if [[ -z "$NORMALIZED_TIME" ]]; then
+              echo "::warning title=构建时间无效::自定义构建时间无法解析为真实 UTC 时间。"
               exit 1
             fi
 
-            DATESTR="$INPUT_TIME"
+            DATESTR="$NORMALIZED_TIME"
           else
             DATESTR="$(TZ='UTC' date +'%a %b %d %T %Z %Y')"
           fi
