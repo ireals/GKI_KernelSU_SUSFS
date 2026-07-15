@@ -192,22 +192,23 @@ index a4364598..01367c74 100644
  }
 diff --git a/kernel/feature/bypass_charge.c b/kernel/feature/bypass_charge.c
 new file mode 100644
-index 00000000..e0c089af
+index 00000000..230c3f20
 --- /dev/null
 +++ b/kernel/feature/bypass_charge.c
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,124 @@
 +#include <linux/module.h>
 +#include <linux/kprobes.h>
 +#include <linux/sysfs.h>
 +#include <linux/kobject.h>
 +#include <linux/string.h>
++#include <linux/power_supply.h>
 +
 +#include "bypass_charge.h"
 +
 +// ==========================================
-+// Targeted for POCO F6 Pro / Redmi K70 (vermeer)
++// Universal Method: Intercept standard Linux power_supply API
 +// ==========================================
-+#define TARGET_FUNC_NAME "battery_psy_set_fcc"
++#define TARGET_FUNC_NAME "power_supply_set_property"
 +
 +static int bypass_enabled = 0;
 +static int kprobe_registered = 0;
@@ -216,19 +217,29 @@ index 00000000..e0c089af
 +static int bypass_charge_pre_handler(struct kprobe *p, struct pt_regs *regs)
 +{
 +    if (bypass_enabled) {
-+        // We only print once in a while to avoid log spam, or we just keep it silent.
-+        // For debugging, you can uncomment this:
-+        // pr_info_ratelimited("ksu_bypass: intercepting %s to force 0mA\n", TARGET_FUNC_NAME);
-+        
-+        // ==========================================
-+        // TODO: MODIFY ARGUMENTS BASED ON TARGET FUNC
-+        // Assuming ARM64 and the first argument is FCC in mA or uA
-+        // ==========================================
++        int psp;
 +#if defined(__aarch64__)
-+        regs->regs[0] = 0; // Set first argument to 0
++        psp = (int)regs->regs[1];
 +#elif defined(__x86_64__)
-+        regs->di = 0; // Set first argument to 0
++        psp = (int)regs->si;
++#else
++        return 0;
 +#endif
++
++        // POWER_SUPPLY_PROP_FAST_CHARGE_CURRENT (64) or POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT (63)
++        if (psp == POWER_SUPPLY_PROP_FAST_CHARGE_CURRENT || 
++            psp == POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT) {
++            
++            union power_supply_propval *val;
++#if defined(__aarch64__)
++            val = (union power_supply_propval *)regs->regs[2];
++#elif defined(__x86_64__)
++            val = (union power_supply_propval *)regs->dx;
++#endif
++            if (val && val->intval > 0) {
++                val->intval = 0; // Force requested current to 0
++            }
++        }
 +    }
 +    return 0;
 +}
