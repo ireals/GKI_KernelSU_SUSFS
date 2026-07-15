@@ -192,10 +192,10 @@ index a4364598..01367c74 100644
  }
 diff --git a/kernel/feature/bypass_charge.c b/kernel/feature/bypass_charge.c
 new file mode 100644
-index 00000000..8c112ca2
+index 00000000..e0c089af
 --- /dev/null
 +++ b/kernel/feature/bypass_charge.c
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,113 @@
 +#include <linux/module.h>
 +#include <linux/kprobes.h>
 +#include <linux/sysfs.h>
@@ -210,6 +210,7 @@ index 00000000..8c112ca2
 +#define TARGET_FUNC_NAME "battery_psy_set_fcc"
 +
 +static int bypass_enabled = 0;
++static int kprobe_registered = 0;
 +static struct kobject *bypass_kobj = NULL;
 +
 +static int bypass_charge_pre_handler(struct kprobe *p, struct pt_regs *regs)
@@ -247,10 +248,27 @@ index 00000000..8c112ca2
 +static ssize_t bypass_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 +{
 +    int val;
++    int ret;
 +    if (kstrtoint(buf, 10, &val) < 0)
 +        return -EINVAL;
 +    
-+    bypass_enabled = (val != 0);
++    val = (val != 0);
++
++    if (val && !kprobe_registered) {
++        ret = register_kprobe(&kp_bypass);
++        if (ret < 0) {
++            pr_err("ksu_bypass: register_kprobe failed, returned %d\n", ret);
++            return ret;
++        }
++        kprobe_registered = 1;
++        pr_info("ksu_bypass: Planted kprobe at %s\n", TARGET_FUNC_NAME);
++    } else if (!val && kprobe_registered) {
++        unregister_kprobe(&kp_bypass);
++        kprobe_registered = 0;
++        pr_info("ksu_bypass: kprobe at %s unregistered\n", TARGET_FUNC_NAME);
++    }
++    
++    bypass_enabled = val;
 +    pr_info("ksu_bypass: bypass_enabled set to %d\n", bypass_enabled);
 +    return count;
 +}
@@ -275,20 +293,13 @@ index 00000000..8c112ca2
 +        return;
 +    }
 +
-+    // Register kprobe
-+    ret = register_kprobe(&kp_bypass);
-+    if (ret < 0) {
-+        pr_err("ksu_bypass: register_kprobe failed, returned %d\n", ret);
-+        pr_err("ksu_bypass: Make sure '%s' exists in the loaded modules.\n", TARGET_FUNC_NAME);
-+        // Note: We don't abort sysfs creation so user can still see the file, but it won't do anything.
-+    } else {
-+        pr_info("ksu_bypass: Planted kprobe at %s\n", TARGET_FUNC_NAME);
-+    }
++    // Removed register_kprobe from here. 
++    // It will be registered dynamically in bypass_store when enabled.
 +}
 +
 +void ksu_bypass_charge_exit(void)
 +{
-+    if (kp_bypass.addr) {
++    if (kprobe_registered) {
 +        unregister_kprobe(&kp_bypass);
 +        pr_info("ksu_bypass: kprobe at %s unregistered\n", TARGET_FUNC_NAME);
 +    }
