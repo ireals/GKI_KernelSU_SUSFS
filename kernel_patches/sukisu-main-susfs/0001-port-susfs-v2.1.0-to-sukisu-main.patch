@@ -593,7 +593,7 @@ index 62cfaabf..6192864d 100644
  
  #endif
 diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
-index 38d1476f..8273c8fa 100644
+index 38d1476f..19750700 100644
 --- a/kernel/runtime/ksud_integration.c
 +++ b/kernel/runtime/ksud_integration.c
 @@ -19,6 +19,8 @@
@@ -616,7 +616,7 @@ index 38d1476f..8273c8fa 100644
  
  // clang-format off
  static const char KERNEL_SU_RC[] =
-@@ -49,23 +53,15 @@ static const char KERNEL_SU_RC[] =
+@@ -49,23 +53,14 @@ static const char KERNEL_SU_RC[] =
      "\n";
  // clang-format on
  
@@ -627,7 +627,6 @@ index 38d1476f..8273c8fa 100644
 +#ifdef CONFIG_KSU_SUSFS
 +DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
 +DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
-+DEFINE_STATIC_KEY_TRUE(ksud_execve_key);
 +#else
  static struct work_struct stop_input_hook_work;
 -
@@ -646,7 +645,7 @@ index 38d1476f..8273c8fa 100644
  
  static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
  {
-@@ -146,7 +142,7 @@ fail:
+@@ -146,7 +141,7 @@ fail:
      return false;
  }
  
@@ -655,7 +654,7 @@ index 38d1476f..8273c8fa 100644
  {
      static const char app_process[] = "/system/bin/app_process";
      static bool first_zygote = true;
-@@ -155,6 +151,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
+@@ -155,6 +150,9 @@ void ksu_handle_execveat_ksud(const char *path, struct user_arg_ptr *argv)
      static const char system_bin_init[] = "/system/bin/init";
      static bool init_second_stage_executed = false;
  
@@ -665,7 +664,7 @@ index 38d1476f..8273c8fa 100644
      // https://cs.android.com/android/platform/superproject/+/android-16.0.0_r2:system/core/init/main.cpp;l=77
      if (unlikely(!memcmp(path, system_bin_init, sizeof(system_bin_init) - 1) && argv)) {
          char buf[16];
-@@ -459,7 +458,7 @@ static void ksu_install_rc_hook(struct file *file)
+@@ -459,7 +457,7 @@ static void ksu_install_rc_hook(struct file *file)
      file->f_op = &fops_proxy;
  }
  
@@ -674,7 +673,7 @@ index 38d1476f..8273c8fa 100644
  {
      struct file *file = fget(fd);
      if (!file) {
-@@ -469,6 +468,36 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
+@@ -469,6 +467,31 @@ static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *
      fput(file);
  }
  
@@ -701,17 +700,12 @@ index 38d1476f..8273c8fa 100644
 +    fput(file);
 +}
 +
-+void ksu_stop_ksud_execve_hook(void)
-+{
-+    if (static_key_enabled(&ksud_execve_key))
-+        static_branch_disable(&ksud_execve_key);
-+}
 +#endif
 +
  static unsigned int volumedown_pressed_count = 0;
  
  static bool is_volumedown_enough(unsigned int count)
-@@ -476,7 +505,7 @@ static bool is_volumedown_enough(unsigned int count)
+@@ -476,7 +499,7 @@ static bool is_volumedown_enough(unsigned int count)
      return count >= 3;
  }
  
@@ -720,7 +714,7 @@ index 38d1476f..8273c8fa 100644
  {
      if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
          int val = *value;
-@@ -519,6 +548,7 @@ bool ksu_is_safe_mode()
+@@ -519,6 +542,7 @@ bool ksu_is_safe_mode()
      return false;
  }
  
@@ -728,7 +722,7 @@ index 38d1476f..8273c8fa 100644
  void ksu_execve_hook_ksud(const struct pt_regs *regs)
  {
      const char __user **filename_user = (const char **)&PT_REGS_PARM1(regs);
-@@ -542,17 +572,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
+@@ -542,17 +566,15 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
          return;
      }
  
@@ -748,7 +742,7 @@ index 38d1476f..8273c8fa 100644
      return orig_sys_read(regs);
  }
  
-@@ -614,12 +642,20 @@ static void do_stop_input_hook(struct work_struct *work)
+@@ -614,12 +636,20 @@ static void do_stop_input_hook(struct work_struct *work)
      unregister_kprobe(&input_event_kp);
  }
  
@@ -770,7 +764,7 @@ index 38d1476f..8273c8fa 100644
  
  void ksu_stop_input_hook_runtime(void)
  {
-@@ -628,13 +664,20 @@ void ksu_stop_input_hook_runtime(void)
+@@ -628,13 +658,20 @@ void ksu_stop_input_hook_runtime(void)
          return;
      }
      input_hook_stopped = true;
@@ -792,7 +786,7 @@ index 38d1476f..8273c8fa 100644
      int ret;
  
      ksu_syscall_table_hook(__NR_read, ksu_sys_read, &orig_sys_read);
-@@ -644,14 +687,20 @@ void __init ksu_ksud_init()
+@@ -644,14 +681,20 @@ void __init ksu_ksud_init()
      pr_info("ksud: input_event_kp: %d\n", ret);
  
      INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
