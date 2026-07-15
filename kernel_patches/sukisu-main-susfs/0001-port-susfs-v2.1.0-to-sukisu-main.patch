@@ -128,7 +128,7 @@ index ac416c5a..07592494 100644
 +
  endmenu
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index a4364598..70311acf 100644
+index a4364598..8d29deb2 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,9 @@
@@ -141,7 +141,7 @@ index a4364598..70311acf 100644
  
  #include "policy/allowlist.h"
  #include "policy/app_profile.h"
-@@ -18,13 +21,17 @@
+@@ -18,6 +21,7 @@
  #include "runtime/ksud.h"
  #include "runtime/ksud_boot.h"
  #include "feature/sulog.h"
@@ -149,17 +149,15 @@ index a4364598..70311acf 100644
  #include "supercall/supercall.h"
  #include "ksu.h"
  #include "infra/file_wrapper.h"
- #include "selinux/selinux.h"
-+#ifndef CONFIG_KSU_SUSFS
+@@ -25,6 +29,7 @@
  #include "hook/syscall_hook.h"
-+#endif
  #include "feature/adb_root.h"
  #include "feature/selinux_hide.h"
 +#include "hook/setuid_hook.h"
  #include "feature/uts_spoof.h"
  #include "infra/symbol_resolver.h"
  
-@@ -139,7 +146,9 @@ int __init kernelsu_init(void)
+@@ -139,7 +144,9 @@ int __init kernelsu_init(void)
          ksu_spoof_version(spoof_release, spoof_version);
      }
  
@@ -169,7 +167,7 @@ index a4364598..70311acf 100644
  
      ksu_feature_init();
      ksu_sulog_init();
-@@ -149,6 +158,12 @@ int __init kernelsu_init(void)
+@@ -149,6 +156,12 @@ int __init kernelsu_init(void)
  
      ksu_supercalls_init();
  
@@ -182,27 +180,7 @@ index a4364598..70311acf 100644
      if (ksu_late_loaded) {
          pr_info("late load mode, skipping kprobe hooks\n");
  
-@@ -164,7 +179,9 @@ int __init kernelsu_init(void)
-         ksu_allowlist_init();
-         ksu_load_allow_list();
- 
-+#ifndef CONFIG_KSU_SUSFS
-         ksu_syscall_hook_manager_init();
-+#endif
- 
-         ksu_throne_tracker_init();
-         ksu_observer_init();
-@@ -179,7 +196,9 @@ int __init kernelsu_init(void)
-         }
- 
-     } else {
-+#ifndef CONFIG_KSU_SUSFS
-         ksu_syscall_hook_manager_init();
-+#endif
- 
-         ksu_allowlist_init();
- 
-@@ -201,7 +220,12 @@ int __init kernelsu_init(void)
+@@ -201,7 +214,12 @@ int __init kernelsu_init(void)
  void __exit kernelsu_exit(void)
  {
      // Phase 1: Stop all hooks first to prevent new callbacks
