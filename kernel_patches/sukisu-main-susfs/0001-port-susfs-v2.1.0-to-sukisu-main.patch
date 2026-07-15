@@ -128,7 +128,7 @@ index ac416c5a..07592494 100644
 +
  endmenu
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index a4364598..8d29deb2 100644
+index a4364598..fccde089 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,9 @@
@@ -157,41 +157,16 @@ index a4364598..8d29deb2 100644
  #include "feature/uts_spoof.h"
  #include "infra/symbol_resolver.h"
  
-@@ -139,7 +144,9 @@ int __init kernelsu_init(void)
-         ksu_spoof_version(spoof_release, spoof_version);
-     }
- 
-+#ifndef CONFIG_KSU_SUSFS
-     ksu_syscall_hook_init();
-+#endif
- 
-     ksu_feature_init();
-     ksu_sulog_init();
-@@ -149,6 +156,12 @@ int __init kernelsu_init(void)
+@@ -149,6 +154,10 @@ int __init kernelsu_init(void)
  
      ksu_supercalls_init();
  
 +#ifdef CONFIG_KSU_SUSFS
-+    ksu_setuid_hook_init();
-+    ksu_sucompat_init();
 +    susfs_init();
 +#endif
 +
      if (ksu_late_loaded) {
          pr_info("late load mode, skipping kprobe hooks\n");
- 
-@@ -201,7 +214,12 @@ int __init kernelsu_init(void)
- void __exit kernelsu_exit(void)
- {
-     // Phase 1: Stop all hooks first to prevent new callbacks
-+#ifndef CONFIG_KSU_SUSFS
-     ksu_syscall_hook_manager_exit();
-+#else
-+    ksu_sucompat_exit();
-+    ksu_setuid_hook_exit();
-+#endif
- 
-     ksu_supercalls_exit();
  
 diff --git a/kernel/feature/kernel_umount.c b/kernel/feature/kernel_umount.c
 index f914ff82..7ccfb073 100644
